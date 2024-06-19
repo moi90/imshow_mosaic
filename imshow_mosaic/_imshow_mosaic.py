@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Any, Literal, Mapping, Optional, Union
 import pandas as pd
 import numpy as np
 import rectpack
@@ -11,14 +11,14 @@ import skimage.measure
 def _clean_data(data, **kwargs) -> pd.DataFrame:
     result = {}
     for k, v in kwargs.items():
-        if v is None:
-            continue
+        # if v is None:
+        #     continue
 
-        # First try to treat v as a key in data
         try:
+            # First try to treat v as a key in data
             result[k] = data[v]
-        except KeyError as exc:
-            print(exc)
+        except KeyError:
+            # otherwise, use the value itself
             result[k] = v
 
     return pd.DataFrame(result)
@@ -55,8 +55,8 @@ def imshow_mosaic(
     scalebar_len_px: Optional[int] = None,
     scalebar_text: Optional[str] = None,
     label_kwargs=None,
-    draw_packrect=False,
-    packrect_kwargs=None,
+    packrect_color=None,
+    packrect_kwargs: Optional[Mapping[str, Any]]=None,
     draw_obj_boundaries=False,
     draw_centroid=False,
     draw_img_boundaries=False,
@@ -64,9 +64,10 @@ def imshow_mosaic(
     clip_ax=True,
     bgcolor=None,
     ax_frame_on=False,
-    ax: plt.Axes = None,
+    ax: Optional[plt.Axes] = None, # type: ignore
     verbose=False,
     random_state=None,
+    background_color=None,
 ):
     """
     Plot images in a space-saving mosaic.
@@ -110,9 +111,9 @@ def imshow_mosaic(
         label_kwargs = {}
 
     if packrect_kwargs is None:
-        packrect_kwargs = dict(ec="b")
+        packrect_kwargs = {}
 
-    data = _clean_data(data, img=img, cx=cx, cy=cy, w=w, h=h, label=label, debug=debug)
+    data = _clean_data(data, img=img, cx=cx, cy=cy, w=w, h=h, label=label, debug=debug, packrect_color=packrect_color, background_color=background_color)
     _apply_defaults(data, cx=0.5, cy=0.5, label=None)
     _init_wh(data)
 
@@ -161,6 +162,8 @@ def imshow_mosaic(
             obj.img,
             extent=[_x, _x + _w, _y, _y + _h],  # transform=ax.transData
             clip_on=clip_ax,
+            # Put images on top
+            zorder=1,
         )
 
         if draw_img_boundaries:
@@ -189,21 +192,37 @@ def imshow_mosaic(
             if verbose:
                 print(f"  {obj.label}")
 
+        if obj.background_color is not None:
+            background = matplotlib.patches.Rectangle(
+                (obj.x_grid, obj.y_grid),
+                obj.w_grid_i,
+                obj.h_grid_i,
+                fc=obj.background_color,
+                transform=ax.transData,
+                clip_on=True,
+                zorder=0,
+            )
+            ax.add_artist(background)
+
         # packrect for image clipping and drawing
+        obj_packrect_kwargs = {**packrect_kwargs, "edgecolor": obj.packrect_color}
         packrect = matplotlib.patches.Rectangle(
             (obj.x_grid, obj.y_grid),
             obj.w_grid_i,
             obj.h_grid_i,
             fc="None",
             transform=ax.transData,
-            clip_on=False,
-            **packrect_kwargs,
+            # clip_on=False,
+            **obj_packrect_kwargs,
         )
-        if draw_packrect:
-            ax.add_artist(packrect)
 
         if clip_packrect:
             im_artist.set_clip_path(packrect)
+        
+        if obj.packrect_color is not None:
+            ax.add_artist(packrect)
+            packrect.set_clip_path(packrect)
+
 
         if draw_obj_boundaries:
             r = matplotlib.patches.Rectangle(
@@ -252,8 +271,10 @@ def imshow_mosaic(
         ax.set_yticks([])
 
     # Set correct limits
-    ax.set_xlim(0, (data["x_grid"] + data["w_grid_i"]).max())
-    ax.set_ylim(ylim, (data["y_grid"] + data["h_grid_i"]).max())
+    # ax.set_xlim(0, (data["x_grid"] + data["w_grid_i"]).max())
+    # ax.set_ylim(ylim, (data["y_grid"] + data["h_grid_i"]).max())
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, ylim)
 
 
 def background(img: np.ndarray) -> Union[float, np.ndarray]:
@@ -276,7 +297,7 @@ def background(img: np.ndarray) -> Union[float, np.ndarray]:
     raise ValueError(f"Unexpected shape: {img.shape}")
 
 
-def image2alpha(img: np.ndarray, bg: Union[None, np.ndarray, float] = None):
+def image2alpha(img: np.ndarray, bg: Union[None, np.ndarray, float] = None, foreground: Literal[None, "light", "dark"]=None):
     """
     Convert a grayscale image with uniform background into an RGBA image and a solid background color.
 
@@ -293,6 +314,13 @@ def image2alpha(img: np.ndarray, bg: Union[None, np.ndarray, float] = None):
     alpha = skimage.util.dtype._convert(
         np.abs((img - bg) / (halftone - bg)), dtype=img.dtype
     )
+
+    if foreground == "light":
+        # Hide dark parts
+        alpha[img < bg] = 0
+    elif foreground == "dark":
+        # Hide light parts
+        alpha[img >= bg] = 0
 
     rgba[:, :, -1] = alpha
 

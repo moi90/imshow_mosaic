@@ -1,4 +1,4 @@
-from .imshow_mosaic import (
+from ._imshow_mosaic import (
     background,
     centroid_dimensions,
     image2alpha,
