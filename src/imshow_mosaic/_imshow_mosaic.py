@@ -138,7 +138,7 @@ def imshow_mosaic(
     _init_wh(data)
 
     if shuffle:
-        data = data.sample(frac=1, random_state=random_state)
+        data = data.sample(frac=1, random_state=random_state, replace=False)
 
     # Calculate size in terms of grid_size
     data[["w_grid", "h_grid"]] = data[["w", "h"]] / grid_size
