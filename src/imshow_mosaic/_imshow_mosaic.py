@@ -56,7 +56,7 @@ def imshow_mosaic(
     scalebar_text: Optional[str] = None,
     label_kwargs=None,
     packrect_color=None,
-    packrect_kwargs: Optional[Mapping[str, Any]]=None,
+    packrect_kwargs: Optional[Mapping[str, Any]] = None,
     draw_obj_boundaries=False,
     draw_centroid=False,
     draw_img_boundaries=False,
@@ -64,7 +64,7 @@ def imshow_mosaic(
     clip_ax=True,
     bgcolor=None,
     ax_frame_on=False,
-    ax: Optional[plt.Axes] = None, # type: ignore
+    ax: Optional[plt.Axes] = None,  # type: ignore
     verbose=False,
     random_state=None,
     background_color=None,
@@ -113,12 +113,23 @@ def imshow_mosaic(
     if packrect_kwargs is None:
         packrect_kwargs = {}
 
-    data = _clean_data(data, img=img, cx=cx, cy=cy, w=w, h=h, label=label, debug=debug, packrect_color=packrect_color, background_color=background_color)
+    data = _clean_data(
+        data,
+        img=img,
+        cx=cx,
+        cy=cy,
+        w=w,
+        h=h,
+        label=label,
+        debug=debug,
+        packrect_color=packrect_color,
+        background_color=background_color,
+    )
     _apply_defaults(data, cx=0.5, cy=0.5, label=None)
     _init_wh(data)
 
     if shuffle:
-        data = data.sample(frac=1, random_state=random_state)
+        data = data.sample(frac=1, random_state=random_state, replace=False)
 
     # Calculate size in terms of grid_size
     data[["w_grid", "h_grid"]] = data[["w", "h"]] / grid_size
@@ -218,11 +229,10 @@ def imshow_mosaic(
 
         if clip_packrect:
             im_artist.set_clip_path(packrect)
-        
+
         if obj.packrect_color is not None:
             ax.add_artist(packrect)
             packrect.set_clip_path(packrect)
-
 
         if draw_obj_boundaries:
             r = matplotlib.patches.Rectangle(
@@ -297,7 +307,11 @@ def background(img: np.ndarray) -> Union[float, np.ndarray]:
     raise ValueError(f"Unexpected shape: {img.shape}")
 
 
-def image2alpha(img: np.ndarray, bg: Union[None, np.ndarray, float] = None, foreground: Literal[None, "light", "dark"]=None):
+def image2alpha(
+    img: np.ndarray,
+    bg: Union[None, np.ndarray, float] = None,
+    foreground: Literal[None, "light", "dark"] = None,
+):
     """
     Convert a grayscale image with uniform background into an RGBA image and a solid background color.
 
