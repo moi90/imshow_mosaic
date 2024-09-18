@@ -8,20 +8,29 @@ import skimage.util.dtype
 import skimage.measure
 
 
-def _clean_data(data, **kwargs) -> pd.DataFrame:
-    result = {}
+def _clean_data(data: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    result = pd.DataFrame(None, index=data.index)
     for k, v in kwargs.items():
-        # if v is None:
-        #     continue
+        if isinstance(k, str):
+            try:
+                # First try to treat v as a key in data
+                result[k] = data[v]
+                continue
+            except KeyError:
+                pass
 
-        try:
-            # First try to treat v as a key in data
-            result[k] = data[v]
-        except KeyError:
-            # otherwise, use the value itself
-            result[k] = v
+        # otherwise, use the value itself
 
-    return pd.DataFrame(result)
+        if (
+            not isinstance(v, str)
+            and isinstance(v, (list, tuple, np.ndarray))
+            and len(v) != len(data)
+        ):
+            v = [v] * len(data)
+
+        result[k] = v
+
+    return result
 
 
 def _apply_defaults(data: pd.DataFrame, **kwargs):
@@ -56,7 +65,7 @@ def imshow_mosaic(
     scalebar_text: Optional[str] = None,
     label_kwargs=None,
     packrect_color=None,
-    packrect_kwargs: Optional[Mapping[str, Any]]=None,
+    packrect_kwargs: Optional[Mapping[str, Any]] = None,
     draw_obj_boundaries=False,
     draw_centroid=False,
     draw_img_boundaries=False,
@@ -64,7 +73,7 @@ def imshow_mosaic(
     clip_ax=True,
     bgcolor=None,
     ax_frame_on=False,
-    ax: Optional[plt.Axes] = None, # type: ignore
+    ax: Optional[plt.Axes] = None,  # type: ignore
     verbose=False,
     random_state=None,
     background_color=None,
@@ -113,7 +122,18 @@ def imshow_mosaic(
     if packrect_kwargs is None:
         packrect_kwargs = {}
 
-    data = _clean_data(data, img=img, cx=cx, cy=cy, w=w, h=h, label=label, debug=debug, packrect_color=packrect_color, background_color=background_color)
+    data = _clean_data(
+        data,
+        img=img,
+        cx=cx,
+        cy=cy,
+        w=w,
+        h=h,
+        label=label,
+        debug=debug,
+        packrect_color=packrect_color,
+        background_color=background_color,
+    )
     _apply_defaults(data, cx=0.5, cy=0.5, label=None)
     _init_wh(data)
 
@@ -181,10 +201,12 @@ def imshow_mosaic(
             ax.plot(_cx, _cy, "rx")
 
         if obj.label is not None:
+            verticalalignment = label_kwargs.pop("verticalalignment", "center")
             ax.annotate(
                 obj.label,
-                (_cx, obj.y_grid),
+                (_cx, obj.y_grid if verticalalignment == "top" else _cy),
                 ha="center",
+                verticalalignment=verticalalignment,
                 clip_on=clip_ax,
                 **label_kwargs,
             )
@@ -218,11 +240,10 @@ def imshow_mosaic(
 
         if clip_packrect:
             im_artist.set_clip_path(packrect)
-        
+
         if obj.packrect_color is not None:
             ax.add_artist(packrect)
             packrect.set_clip_path(packrect)
-
 
         if draw_obj_boundaries:
             r = matplotlib.patches.Rectangle(
@@ -297,7 +318,11 @@ def background(img: np.ndarray) -> Union[float, np.ndarray]:
     raise ValueError(f"Unexpected shape: {img.shape}")
 
 
-def image2alpha(img: np.ndarray, bg: Union[None, np.ndarray, float] = None, foreground: Literal[None, "light", "dark"]=None):
+def image2alpha(
+    img: np.ndarray,
+    bg: Union[None, np.ndarray, float] = None,
+    foreground: Literal[None, "light", "dark"] = None,
+):
     """
     Convert a grayscale image with uniform background into an RGBA image and a solid background color.
 
